@@ -11,7 +11,7 @@
         <block title="Payment Terminals">
           <setting string="HOBEX Payment Terminal"
                    help="Enable HOBEX as a payment terminal option in POS payment methods.">
-            <field name="pos_hobex_enabled"/>
+            <field name="hobex_enabled"/>
           </setting>
         </block>
       </xpath>
