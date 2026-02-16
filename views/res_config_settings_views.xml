@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="res_config_settings_view_form_inherit_pos_hobex" model="ir.ui.view">
+    <field name="name">res.config.settings.view.form.inherit.pos_hobex</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+    <field name="arch" type="xml">
+
+      <!-- Odoo 19 settings views use <app>/<block>/<setting>. Anchor on the POS app node. -->
+      <xpath expr="//app[@name='point_of_sale']" position="inside">
+        <block title="Payment Terminals">
+          <setting string="HOBEX Payment Terminal"
+                   help="Enable HOBEX as a payment terminal option in POS payment methods.">
+            <field name="pos_hobex_enabled"/>
+          </setting>
+        </block>
+      </xpath>
+
+    </field>
+  </record>
+</odoo>

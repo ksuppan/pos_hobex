@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 import json
 import requests
 from urllib.parse import urljoin
 from requests.exceptions import ReadTimeout
-from werkzeug.routing import ValidationError
 import uuid
 import logging
 
@@ -15,8 +14,13 @@ _logger = logging.getLogger(__name__)
 class PosPaymentMethod(models.Model):
     _inherit = 'pos.payment.method'
 
+    @api.model
     def _get_payment_terminal_selection(self):
-        return super(PosPaymentMethod, self)._get_payment_terminal_selection() + [('hobex', 'HOBEX')]
+        res = list(super()._get_payment_terminal_selection() or [])
+        enabled = self.env['ir.config_parameter'].sudo().get_param('pos_hobex.enabled') == 'True'
+        if enabled and ('hobex', _('HOBEX')) not in res:
+            res.append(('hobex', _('HOBEX')))
+        return res
 
     @api.depends('hobex_terminal_mode')
     def _compute_hobex_terminal_address(self):
@@ -35,22 +39,36 @@ class PosPaymentMethod(models.Model):
                 ('payment_method_ids', 'in', method.id),
             ])
 
+    @api.constrains("use_payment_terminal", "hobex_terminal_id", "hobex_user", "hobex_pass")
+    def _constrains_hobex_required_fields(self):
+        for method in self:
+            if method.use_payment_terminal == "hobex":
+                missing = []
+                if not method.hobex_terminal_id:
+                    missing.append(_("Terminal ID"))
+                if not method.hobex_user:
+                    missing.append(_("User"))
+                if not method.hobex_pass:
+                    missing.append(_("Password"))
+                if missing:
+                    raise ValidationError(_("Missing required Hobex fields: %s") % ", ".join(missing))
+
     @api.depends('hobex_auth_token')
     def _compute_hobex_connected(self):
         for method in self:
             method.hobex_connected = bool(method.use_payment_terminal=='hobex' and method.hobex_auth_token)
 
-    hobex_terminal_id = fields.Char('Terminal ID', required_if_terminal='hobex')
+    hobex_terminal_id = fields.Char('Terminal ID')
     hobex_terminal_mode = fields.Selection([
         ('testing', _(u"Testmode")),
         ('production', _(u"Production")),
     ], required=True, default='production', string="Terminal Mode")
     hobex_api_address = fields.Char('Terminal Address', compute='_compute_hobex_terminal_address', store=True)
-    hobex_user = fields.Char('User', required_if_terminal='hobex')
-    hobex_pass = fields.Char('Password', required_if_terminal='hobex')
+    hobex_user = fields.Char('User')
+    hobex_pass = fields.Char('Password')
     hobex_auth_token = fields.Char('Token')
     hobex_connected = fields.Boolean('Connected', compute='_compute_hobex_connected', store=True)
-    hobex_transaction_ids = fields.One2many('pos.payment.hobex.transaction', 'pos_payment_method_id', string="Transactions", readonly=True)
+    hobex_transaction_ids = fields.One2many(comodel_name='pos.payment.hobex.transaction', inverse_name='pos_payment_method_id', string="Transactions", readonly=True, copy=False)
     active_pos_session_ids = fields.Many2many('pos.session', string="Active POS Sessions", compute='_compute_active_pos_sessions')
 
     @api.model
@@ -208,21 +226,6 @@ class PosPaymentMethod(models.Model):
             return res, response
         except Exception as e:
             _logger.info('hobex Exception: %s', str(e))
-
-    def _check_required_if_hobex(self):
-        """ If the field has 'required_if_terminal="hobex"' attribute, then it is required"""
-        empty_field = []
-        for method in self:
-            for k, f in method._fields.items():
-                if method.use_payment_terminal == 'hobex' and getattr(f, 'required_if_terminal', None) == "hobex" and not method[k]:
-                    empty_field.append(self.env['ir.model.fields'].search([('name', '=', k), ('model', '=', method._name)]).field_description)
-        if empty_field:
-            raise ValidationError((', ').join(empty_field))
-        return True
-
-    _constraints = [
-        (_check_required_if_hobex, 'Required fields not filled', []),
-    ]
 
     def proxy_hobex_status_request(self, transaction_id):
         transaction = self.env['pos.payment.hobex.transaction'].sudo().search([

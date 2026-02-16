@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
-from odoo.osv.expression import AND, OR
-
+from odoo.fields import Domain 
 
 class POSSession(models.Model):
     _name = 'pos.session'

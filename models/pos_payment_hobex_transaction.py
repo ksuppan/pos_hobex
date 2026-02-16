@@ -15,7 +15,7 @@ class HobexTransaction(models.Model):
     reference = fields.Char('Reference', required=True)
     transaction_id = fields.Char('Transaction ID', required=True)
     transaction_date = fields.Datetime('Transaction Date', default=lambda self: fields.Datetime.now())
-    pos_payment_method_id = fields.Many2one('pos.payment.method', string="Payment method", required=True)
+    pos_payment_method_id = fields.Many2one('pos.payment.method', string="Payment method", ondelete="cascade", index=True, required=True)
     transaction_type = fields.Integer('Transaction Type', default=1)
     amount = fields.Float('Amount')
     currency = fields.Char('Currency', default='EUR')
@@ -33,9 +33,10 @@ class HobexTransaction(models.Model):
         ('refunded', 'Refunded'),
     ], default='pending', string="State")
 
-    _sql_constraints = [
-        ('transactionid_tid_uniq', 'unique(transaction_id, tid)', 'TransactionID must be unique per TID!'),
-    ]
+    _transactionid_tid_uniq = models.Constraint(
+        "unique(transaction_id, tid)",
+        "TransactionID must be unique per TID!",
+    )
 
     @api.model
     def _update_transaction_with_hobex_result(self, tid, transaction_id, response):
